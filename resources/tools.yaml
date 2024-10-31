@@ -1,0 +1,4 @@
+minimap2: "minimap2"
+samtools: "samtools"
+seqtk: "seqtk"
+R: "R"

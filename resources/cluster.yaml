@@ -1,0 +1,11 @@
+# Cluster resources per rule
+__default__:
+    gres: lscratch:96
+    mem: 4g
+    threads: 2
+    time: 00-00:30:00
+    partition: norm
+    name: "{rule}.{wildcards}"
+    output: "logs/{rule}.${{SLURM_JOBID}}.%j.{wildcards}.out"
+    error: "logs/{rule}.${{SLURM_JOBID}}.%j.{wildcards}.err"
+

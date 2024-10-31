@@ -1,0 +1,24 @@
+# References
+
+workdir:
+    WORKDIR
+scriptsdir:
+    PIPELINE_HOME/workflow/scripts/
+manifest:
+    WORKDIR/config/samples.tsv
+tools:
+    PIPELINE_HOME/resources/tools.yaml
+cluster:
+    PIPELINE_HOME/resources/cluster.yaml
+
+primers: 
+    PIPELINE_HOME/resources/primers.fasta
+
+# Reference by genome annotation version
+gencode_version: v28
+
+v28:
+    ref:
+        /vf/users/khanlab3/gb_omics/resources/genomes/gencode_human_28/GRCh38.primary_assembly.genome.fa
+    gtf:
+        /vf/users/khanlab3/gb_omics/resources/gencode/gencode.v28.annotation.gtf
