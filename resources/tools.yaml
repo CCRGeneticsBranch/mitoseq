@@ -1,4 +1,4 @@
-minimap2: "minimap2"
+bwa: "bwa"
+java: "java"
 samtools: "samtools"
-seqtk: "seqtk"
-R: "R"
+fgbio: "fgbio"

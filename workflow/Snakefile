@@ -1,104 +1,201 @@
-#!/bin/bash
+# Consensus read calling per UMI based on recommended best practices by fgbio: https://github.com/fulcrumgenomics/fgbio/blob/main/docs/FastqToConsensus-RnD.smk
 
-# Implements the xGen Prism DNA Library Prep Kit suggestions for 
-# processing sequence data with UMIs (2020)
+# Import python libraries
+import os
+from os.path import join
+import itertools
+import yaml
+import pandas as pd
 
-ml java
-ml picard/2.26.9
-ml bwa
-ml vardict/1.5.8
+# Set directories
+WORKDIR = config["workdir"]
+RESULTSDIR = join(WORKDIR,"results")
+SCRIPTSDIR = config["scriptsdir"]
 
-# Set paths
-WORK_DIR="/data/khanlab3/Erica/cao/targeted_umi/"
-SAMPLE=$1
-FGBIO_PATH="/data/pehrssonec/fgbio-0.7.0.jar"
-REF="/data/khanlab/projects/ngs_pipeline_testing/References_4.0/New_GRCh37/Index/bwa_0.7.17/hg19.fa" #"/data/khanlab/projects/ngs_pipeline_testing/References_4.0/GRCh38/Index/bwa_0.7.17/hg38.fa"
-TARGETS="xgen_aml_targets.bed"
-VARDICT="/usr/local/apps/vardict/1.5.8/bin"
+# Get list of samples
+manifest = pd.read_table(config["manifest"])
+SAMPLES =  manifest['Sample'].unique()
+FASTQ = dict(zip(manifest['Sample'], manifest['Fastq']))
 
-# Construct unmapped bam
-java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $PICARD_JAR FastqToSam \
-  FASTQ=$WORK_DIR$SAMPLE\.R1.fastq.gz \
-  FASTQ2=$WORK_DIR$SAMPLE\.R2.fastq.gz \
-  O=$WORK_DIR$SAMPLE\.unmapped.bam \
-  SM=$SAMPLE
+# Define tools
+with open(config["tools"]) as f:
+    TOOLS = yaml.safe_load(f)
 
-# Extract UMIs and add to the RX tag
-java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_PATH ExtractUmisFromBam \
-    --input=$WORK_DIR$SAMPLE\.unmapped.bam --output=$WORK_DIR$SAMPLE\.unmapped.withUMI.bam \
-    --read-structure=8M143T 8M143T --molecular-index-tags=ZA ZB --single-tag=RX
+# Define resources per rule
+with open(config["cluster"]) as f:
+    CLUSTER = yaml.safe_load(f)
 
-# Align reads and merge unmapped/mapped bams
-java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $PICARD_JAR SamToFastq \
-    I=$WORK_DIR$SAMPLE\.unmapped.withUMI.bam F=/dev/stdout INTERLEAVE=true \
-  | bwa mem -p -t 4 $REF /dev/stdin \
-  | java -Xmx24g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $PICARD_JAR MergeBamAlignment \
-    UNMAPPED=$WORK_DIR$SAMPLE\.unmapped.withUMI.bam ALIGNED=/dev/stdin O=$WORK_DIR$SAMPLE\.mapped.bam R=$REF \
-    SO=coordinate ALIGNER_PROPER_PAIR_FLAGS=true MAX_GAPS=-1 \
-    ORIENTATIONS=FR VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true
+getthreads=lambda rname:int(CLUSTER[rname]["threads"]) if rname in CLUSTER and "threads" in CLUSTER[rname] else int(CLUSTER["__default__"]["threads"])
+getmemg=lambda rname:CLUSTER[rname]["mem"] if rname in CLUSTER and "mem" in CLUSTER[rname] else CLUSTER["__default__"]["mem"]
 
-# Error correction by collapsing single read families (same start-stop, UMI)
+# Define genomes
+genome = config['genome']
 
-## Correct errors in the UMI sequences
-java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_PATH CorrectUmis \
-  -i $WORK_DIR$SAMPLE\.mapped.bam -o $WORK_DIR$SAMPLE\.mapped.fixedumi.bam \
-  --max-mismatches=3 \
-  --min-distance=1 \
-  -M $WORK_DIR$SAMPLE\.metrics.txt \
-  -r $WORK_DIR$SAMPLE\.rejected.bam -t RX -u GAGACGAT TTCCAAGG CGCATGAT ACGGAACA CGGCTAAT GCTATCCT TGGACTCT \
-    ATCCAGAG CTTAGGAC GTGCCATA TCGCTGTT TTCGTTGG AAGCACTG GTCGAAGA ACCACGAT GATTACCG GCACAACT \
-    GCGTCATT GAAGGAAG ACTGAGGT TGAAGACG GTTACGCA AGCGTGTT GATCGAGT TTGCGAAG CTGTTGAC GATGTGTG \
-    ACGTTCAG TTGCAGAC CAATGTGG ACGACTTG ACTAGGAG
+# Rules
 
-## Group read families (assign source to each read, store in MI tag, output bam sorted by MI tag)
-java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_PATH GroupReadsByUmi \
-  --input=$WORK_DIR$SAMPLE\.mapped.fixedumi.bam --output=$WORK_DIR$SAMPLE\.grouped.bam \
-  --strategy=paired --edits=0 --min-map-q=20
+# Since both rules can generate a uBam...
+ruleorder: call_consensus_reads > fastq_to_ubam
 
-## Collapse single read families
-java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_PATH CallMolecularConsensusReads \
-  --input=$WORK_DIR$SAMPLE\.grouped.bam --output=$WORK_DIR$SAMPLE\.consensus.unmapped.bam \
-  --error-rate-pre-umi=45 --error-rate-post-umi=30 \
-  --min-consensus-base-quality=40 --min-input-base-quality=30 --min-reads=1
+rule all:
+    input:
+        "my_sample.mapped.bam",
+        "my_sample.grouped.bam",
+        "my_sample.cons.filtered.bam",
 
-## Align collapsed families and merge mapped/unmapped bams
-java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $PICARD_JAR SamToFastq \
-  I=$WORK_DIR$SAMPLE\.consensus.unmapped.bam F=/dev/stdout INTERLEAVE=true \
-  | bwa mem -p -t 4 $REF /dev/stdin \
-  | java -Xmx24g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $PICARD_JAR MergeBamAlignment \
-    UNMAPPED=$WORK_DIR$SAMPLE\.consensus.unmapped.bam ALIGNED=/dev/stdin \
-    O=$WORK_DIR$SAMPLE\.consensus.mapped.bam R=$REF \
-    SO=coordinate ALIGNER_PROPER_PAIR_FLAGS=true MAX_GAPS=-1 \
-    ORIENTATIONS=FR VALIDATION_STRINGENCY=SILENT CREATE_INDEX=true
 
-## Filter collapsed families
-java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_PATH FilterConsensusReads \
-  --input=$WORK_DIR$SAMPLE\.consensus.mapped.bam \
-  --output=$WORK_DIR$SAMPLE\.consensus.mapped.filtered.bam \
-  --ref=$REF \
-  --min-reads=3 \
-  --max-read-error-rate=0.05 \
-  --max-base-error-rate=0.1 \
-  --min-base-quality=40 \
-  --max-no-call-fraction=0.1
+rule link_fastq:
+    """
+    Link fastq from raw data directory with updated names
+    """
+    input:
+        fastq=lambda wildcards: f"{FASTQ[wildcards.sample]}",
+    output:
+        fastq_r1=join(RESULTSDIR,"fastq","{sample}.R1.fastq.gz"),
+        fastq_r2=join(RESULTSDIR,"fastq","{sample}.R2.fastq.gz")
+    shell:
+        """
+        ln -s {input.fastq}_R1.fastq.gz {output.fastq_r1}
+        ln -s {input.fastq}_R2.fastq.gz {output.fastq_r2}
+        """
 
-# Clip overlap between read pairs
-java -Xmx4g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_PATH ClipBam \
-  --input=$WORK_DIR$SAMPLE\.consensus.mapped.filtered.bam \
-  --output=$WORK_DIR$SAMPLE\.consensus.mapped.filtered.clipped.bam \
-  --ref=$REF --soft-clip=false --clip-overlapping-reads=true
+rule fastq_to_ubam:
+    """Generates a uBam from R1 and R2 fastq files."""
+    input:
+        r1 = join(RESULTSDIR,"fastq","{sample}.R1.fastq.gz"),
+        r2 = join(RESULTSDIR,"fastq","{sample}.R2.fastq.gz")
+    params:
+        rs1 = "8M+T",
+        rs2 = "8M+T"
+    output:
+        bam = temp(join(RESULTSDIR,"bam","{sample}.unmapped.bam"))
+    envmodules:
+        TOOLS["java"],
+        TOOLS["fgbio"]
+    log:
+        join("logs","fastq_to_ubam.{sample}.log")
+    shell:
+        """
+        java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_JAR --compression 1 --async-io FastqToBam
+          --input {input.r1} {input.r2}
+          --read-structures {params.rs1} {params.rs2}
+          --sample {wildcards.sample}
+          --library {wildcards.sample}
+          --platform-unit flowcell.lane
+          --output {output.bam} &> {log}
+        """
 
-# Call variants using VarDict
-min_af=0.01
+rule align_bam:
+    """Takes an unmapped BAM and generates an aligned BAM using bwa and ZipperBams."""
+    input:
+        bam = join(RESULTSDIR,"bam","{sample}.unmapped.bam"),
+        ref = config[genome]['ref']
+    output:
+        bam = join(RESULTSDIR,"bam","{sample}.mapped.bam")
+    threads:
+        getthreads("align_bam")
+    envmodules:
+        TOOLS["java"],
+        TOOLS["fgbio"],
+        TOOLS["samtools"],
+        TOOLS["bwa"]
+    log:
+        join("logs","align_bam.{sample}.log")
+    shell:
+        """
+        (
+        samtools fastq {input.bam}
+          | bwa mem -t {threads} -p -K 150000000 -Y {input.ref} -
+          | java -Xmx4g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_JAR --compression 1 --async-io ZipperBams
+              --unmapped {input.bam}
+              --ref {input.ref}
+              --output {output.bam}
+              --tags-to-reverse Consensus
+              --tags-to-revcomp Consensus
+        ) &> {log}"
+        """
 
-$VARDICT/VarDict \
-  -G $REF \
-  -N $SAMPLE \
-  -f ${min_af} \
-  -b $WORK_DIR$SAMPLE\.consensus.mapped.filtered.clipped.bam \
-  -z -c 1 -S 2 -E 3 -g 4 -th 1 --nosv \
-  $WORK_DIR$TARGETS \
-| $VARDICT/teststrandbias.R \
-| $VARDICT/var2vcf_valid.pl -N $SAMPLE -E -f ${min_af} \
-| awk '{if ($1 ~ /^#/) print; else if ($4 !=5) print}' \
-> $SAMPLE\.vcf
+rule group_reads:
+    """Group the raw reads by UMI and position ready for consensus calling."""
+    input:
+        bam = join(RESULTSDIR,"bam","{sample}.mapped.bam")
+    output:
+        bam = join(RESULTSDIR,"bam","{sample}.grouped.bam"),
+        stats = join(RESULTSDIR,"bam","{sample}.grouped-family-sizes.txt")
+    params:
+        allowed_edits = 1,
+    envmodules:
+        TOOLS["java"],
+        TOOLS["fgbio"]
+    log:
+        join("logs","group_reads.{sample}.log")
+    shell:
+        """
+        java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_JAR --compression 1 --async-io GroupReadsByUmi
+          --input {input.bam}
+          --strategy Adjacency
+          --edits {params.allowed_edits}
+          --output {output.bam}
+          --family-size-histogram {output.stats}
+          &> {log}
+        """
+
+rule call_consensus_reads:
+    """Call consensus reads from the grouped reads."""
+    input:
+        bam = join(RESULTSDIR,"bam","{sample}.grouped.bam"),
+    output:
+        bam = temp(join(RESULTSDIR,"bam","{sample}.cons.unmapped.bam")),
+    params:
+        min_reads = 1,
+        min_base_qual = 20
+    threads:
+        getthreads("call_consensus_reads")
+    envmodules:
+        TOOLS["java"],
+        TOOLS["fgbio"]
+    log:
+        join("logs","call_consensus_reads.{sample}.log")
+    shell:
+        """
+        java -Xmx20g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_JAR --compression 1 CallMolecularConsensusReads
+          --input {input.bam}
+          --output {output.bam}
+          --min-reads {params.min_reads}
+          --min-input-base-quality {params.min_base_qual}
+          --consensus-call-overlapping-bases
+          --threads {threads}
+          &> {log}
+        """
+
+rule filter_consensus_reads:
+    """Filters the consensus reads and then sorts into coordinate order."""
+    input:
+        bam = join(RESULTSDIR,"bam","{sample}.cons.mapped.bam"),
+        ref = config[genome]['ref'],
+    output:
+        bam = join(RESULTSDIR,"bam","{sample}.cons.filtered.bam"),
+    params:
+        min_reads = 1,
+        min_base_qual = 40,
+        max_error_rate = 0.2
+    threads:
+        getthreads("filter_consensus_reads")
+    envmodules:
+        TOOLS["java"],
+        TOOLS["fgbio"],
+        TOOLS["samtools"]
+    log:
+        join("logs","filter_consensus_reads.{sample}.log")
+    shell:
+        """
+        (
+        java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_JAR --compression 0 FilterConsensusReads
+          --input {input.bam}
+          --output /dev/stdout
+          --ref {input.ref}
+          --min-reads {params.min_reads}
+          --min-base-quality {params.min_base_qual}
+          --max-base-error-rate {params.max_error_rate}
+          | samtools sort --threads {threads} -o {output.bam}##idx##{output.bam}.bai --write-index
+        ) &> {log}
+        """

@@ -9,3 +9,21 @@ __default__:
     output: "logs/{rule}.${{SLURM_JOBID}}.%j.{wildcards}.out"
     error: "logs/{rule}.${{SLURM_JOBID}}.%j.{wildcards}.err"
 
+fastq_to_ubam:
+    mem: 1g
+
+align_bam:
+    mem: 14g
+    threads: 16
+
+group_reads:
+    mem: 8g
+    threads: 2
+
+call_consensus_reads:
+    mem: 8g
+    threads: 4
+
+filter_consensus_reads:
+    mem: 8g
+    threads: 8
