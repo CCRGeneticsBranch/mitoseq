@@ -15,7 +15,7 @@ SCRIPTSDIR = config["scriptsdir"]
 # Get list of samples
 manifest = pd.read_table(config["manifest"])
 SAMPLES =  manifest['Sample'].unique()
-FASTQ = dict(zip(manifest['Sample'], manifest['Fastq']))
+UBAM = dict(zip(manifest['Sample'], manifest['uBam']))
 
 # Define tools
 with open(config["tools"]) as f:
@@ -32,30 +32,24 @@ getmemg=lambda rname:CLUSTER[rname]["mem"] if rname in CLUSTER and "mem" in CLUS
 genome = config['genome']
 
 # Rules
-
-# Since both rules can generate a uBam...
-ruleorder: call_consensus_reads > fastq_to_ubam
+#ruleorder: call_consensus_reads > fastq_to_ubam
 
 rule all:
     input:
-        "my_sample.mapped.bam",
-        "my_sample.grouped.bam",
-        "my_sample.cons.filtered.bam",
-
-
-rule link_fastq:
+        # Filtered reads
+        expand(join(RESULTSDIR,"bam","{samples}.cons.filtered.bam"),samples=SAMPLES),
+        
+rule link_uBam:
     """
-    Link fastq from raw data directory with updated names
+    Link uBam from raw data directory with updated names
     """
     input:
-        fastq=lambda wildcards: f"{FASTQ[wildcards.sample]}",
+        ubam=lambda wildcards: f"{UBAM[wildcards.sample]}",
     output:
-        fastq_r1=join(RESULTSDIR,"fastq","{sample}.R1.fastq.gz"),
-        fastq_r2=join(RESULTSDIR,"fastq","{sample}.R2.fastq.gz")
+        ubam=join(RESULTSDIR,"uBam","{sample}.unmapped.bam"),
     shell:
         """
-        ln -s {input.fastq}_R1.fastq.gz {output.fastq_r1}
-        ln -s {input.fastq}_R2.fastq.gz {output.fastq_r2}
+        ln -s {input.ubam} {output.ubam}
         """
 
 rule fastq_to_ubam:
@@ -87,7 +81,7 @@ rule fastq_to_ubam:
 rule align_bam:
     """Takes an unmapped BAM and generates an aligned BAM using bwa and ZipperBams."""
     input:
-        bam = join(RESULTSDIR,"bam","{sample}.unmapped.bam"),
+        bam = join(RESULTSDIR,"uBam","{sample}.unmapped.bam"),
         ref = config[genome]['ref']
     output:
         bam = join(RESULTSDIR,"bam","{sample}.mapped.bam")
@@ -123,6 +117,7 @@ rule group_reads:
         stats = join(RESULTSDIR,"bam","{sample}.grouped-family-sizes.txt")
     params:
         allowed_edits = 1,
+        min_map = 1
     envmodules:
         TOOLS["java"],
         TOOLS["fgbio"]
@@ -132,8 +127,9 @@ rule group_reads:
         """
         java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_JAR --compression 1 --async-io GroupReadsByUmi
           --input {input.bam}
-          --strategy Adjacency
+          --strategy Edit
           --edits {params.allowed_edits}
+          --min-map-q {params.min_map}
           --output {output.bam}
           --family-size-histogram {output.stats}
           &> {log}
@@ -170,7 +166,7 @@ rule call_consensus_reads:
 rule filter_consensus_reads:
     """Filters the consensus reads and then sorts into coordinate order."""
     input:
-        bam = join(RESULTSDIR,"bam","{sample}.cons.mapped.bam"),
+        bam = join(RESULTSDIR,"bam","{sample}.cons.unmapped.bam"),
         ref = config[genome]['ref'],
     output:
         bam = join(RESULTSDIR,"bam","{sample}.cons.filtered.bam"),
