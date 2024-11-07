@@ -19,10 +19,13 @@ hg38:
         /fdb/genomebrowser/fasta/hg38.fa
     bwa_ref:
         /fdb/bwa/indexes/hg38.fa
+    bait:
+        PIPELINE_HOME/resources/xgen-human-mtdna-hyb-panel-probes.bed
+    target:
+        PIPELINE_HOME/resources/xgen-human-mtdna-hyb-panel-targets.bed
 
 mm10:
     ref:
         /fdb/genomebrowser/fasta/mm10.fa
     bwa_ref:
         /fdb/bwa/indexes/mm10.fa
-
