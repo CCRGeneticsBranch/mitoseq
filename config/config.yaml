@@ -29,3 +29,7 @@ mm10:
         /fdb/genomebrowser/fasta/mm10.fa
     bwa_ref:
         /fdb/bwa/indexes/mm10.fa
+    bait:
+        PIPELINE_HOME/resources/xGen_mm_mtDNA_panel_probes.bed    
+    target:
+        PIPELINE_HOME/resources/xGen_mm_mtDNA_panel_targets.bed

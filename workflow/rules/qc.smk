@@ -28,14 +28,15 @@ rule picard_casm:
     params:
         ref = config[genome]['ref']
     envmodules:
-        TOOLS["picard"]
+        TOOLS["picard"],
+        TOOLS["samtools"]
     shell:
         """
-        java -Xmx4g -jar $PICARDJARPATH/picard.jar CollectAlignmentSummaryMetrics \
-            -I {input.bam} \
-            -R {params.ref} \
-            -O {output.metrics} \
-            --ASSUME_SORTED false
+        samtools sort {input.bam} \
+          | java -Xmx4g -jar $PICARDJARPATH/picard.jar CollectAlignmentSummaryMetrics \
+              -I /dev/stdin \
+              -R {params.ref} \
+              -O {output.metrics}
         """
 
 rule create_interval_list:
