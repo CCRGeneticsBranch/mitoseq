@@ -43,7 +43,7 @@ rule all:
         expand(join(RESULTSDIR,"bam","{samples}.cons.filtered.bam"),samples=SAMPLES),
 
         # QC
-        expand(join(RESULTSDIR,"qc","fastqc","{samples}._fastqc.html"),samples=SAMPLES),
+        expand(join(RESULTSDIR,"qc","fastqc","{samples}.unmapped_fastqc.html"),samples=SAMPLES),
         expand(join(RESULTSDIR,"qc","picard","{samples}.alignment_summary_metrics"),samples=SAMPLES),
         expand(join(RESULTSDIR,"qc","picard","{samples}.hs_metrics"),samples=SAMPLES),
         join(RESULTSDIR,"qc","multiqc_report.html"),

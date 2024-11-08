@@ -6,7 +6,7 @@ rule fastqc:
     input:
         ubam=join(RESULTSDIR,"uBam","{sample}.unmapped.bam")
     output:
-        html = join(RESULTSDIR,"qc","fastqc","{sample}._fastqc.html")
+        html = join(RESULTSDIR,"qc","fastqc","{sample}.unmapped_fastqc.html")
     params:
         fastqc=join(RESULTSDIR,"qc","fastqc")
     envmodules:
