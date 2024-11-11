@@ -16,27 +16,22 @@ rule fastqc:
         fastqc -o {params.fastqc} -f bam -t $SLURM_CPUS_PER_TASK {input.ubam}
         """
 
-# Picard Alignment Summary
-rule picard_casm:
+# Samtools bam stats
+rule samtools_stats:
     """
-    Run Picard CollectAlignmentSummaryMetrics on aligned reads
+    Run samtools flagstat and idxstats
     """
     input:
         bam=join(RESULTSDIR,"bam","{sample}.mapped.bam")
     output:
-        metrics=join(RESULTSDIR,"qc","picard","{sample}.alignment_summary_metrics")
-    params:
-        ref = config[genome]['ref']
+        flagstat=join(RESULTSDIR,"qc","samtools","{sample}.flagstat"),
+        idxstats=join(RESULTSDIR,"qc","samtools","{sample}.idxstats")
     envmodules:
-        TOOLS["picard"],
         TOOLS["samtools"]
     shell:
         """
-        samtools sort {input.bam} \
-          | java -Xmx4g -jar $PICARDJARPATH/picard.jar CollectAlignmentSummaryMetrics \
-              -I /dev/stdin \
-              -R {params.ref} \
-              -O {output.metrics}
+        samtools flagstat {input.bam} > {output.flagstat}
+        samtools idxstats {input.bam} > {output.idxstats}
         """
 
 rule create_interval_list:
@@ -99,7 +94,8 @@ rule multiqc:
     input:
         fastqc=expand(rules.fastqc.output.html,sample=SAMPLES),
         umis=expand(join(RESULTSDIR,"qc","fgbio","{samples}.grouped-family-sizes.txt"),samples=SAMPLES),
-        casm=expand(rules.picard_casm.output.metrics,sample=SAMPLES),
+        flagstat=expand(rules.samtools_stats.output.flagstat,sample=SAMPLES),
+        idxstats=expand(rules.samtools_stats.output.idxstats,sample=SAMPLES),
         hsmetrics=expand(rules.picard_hsmetrics.output.metrics,sample=SAMPLES),
     output:
         report = join(RESULTSDIR,"qc","multiqc_report.html")

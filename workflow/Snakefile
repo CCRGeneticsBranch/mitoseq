@@ -44,7 +44,8 @@ rule all:
 
         # QC
         expand(join(RESULTSDIR,"qc","fastqc","{samples}.unmapped_fastqc.html"),samples=SAMPLES),
-        expand(join(RESULTSDIR,"qc","picard","{samples}.alignment_summary_metrics"),samples=SAMPLES),
+        expand(join(RESULTSDIR,"qc","samtools","{samples}.flagstat"),samples=SAMPLES),
+        expand(join(RESULTSDIR,"qc","samtools","{samples}.idxstats"),samples=SAMPLES),
         expand(join(RESULTSDIR,"qc","picard","{samples}.hs_metrics"),samples=SAMPLES),
         join(RESULTSDIR,"qc","multiqc_report.html"),
 
@@ -88,9 +89,8 @@ rule align_bam:
           | java -Xmx4g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_JAR --compression 1 --async-io ZipperBams \
               --unmapped {input.bam} \
               --ref {params.ref} \
-              --output {output.bam} \
-              --tags-to-reverse Consensus \
-              --tags-to-revcomp Consensus
+              --output {output.bam}
+        samtools index {output.bam}
         """
 
 rule group_reads:
@@ -142,10 +142,38 @@ rule call_consensus_reads:
           --threads {threads}
         """
 
+rule align_consensus_bam:
+    """Takes the unmapped consensus BAM and generates an aligned BAM using bwa and ZipperBams."""
+    input:
+        bam = join(RESULTSDIR,"bam","{sample}.cons.unmapped.bam")
+    output:
+        bam = join(RESULTSDIR,"bam","{sample}.cons.mapped.bam")
+    params:
+        ref = config[genome]['ref'],
+        bwa_ref = config[genome]['bwa_ref']
+    threads:
+        getthreads("align_bam")
+    envmodules:
+        TOOLS["java"],
+        TOOLS["fgbio"],
+        TOOLS["samtools"],
+        TOOLS["bwa"]
+    shell:
+        """
+        samtools fastq {input.bam} \
+          | bwa mem -t {threads} -p -K 150000000 -Y {params.bwa_ref} - \
+          | java -Xmx4g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_JAR --compression 1 --async-io ZipperBams \
+              --unmapped {input.bam} \
+              --ref {params.ref} \
+              --output {output.bam} \
+              --tags-to-reverse Consensus \
+              --tags-to-revcomp Consensus
+        """
+
 rule filter_consensus_reads:
     """Filters the consensus reads and then sorts into coordinate order."""
     input:
-        bam = join(RESULTSDIR,"bam","{sample}.cons.unmapped.bam")
+        bam = join(RESULTSDIR,"bam","{sample}.cons.mapped.bam")
     output:
         bam = join(RESULTSDIR,"bam","{sample}.cons.filtered.bam")
     params:
@@ -168,5 +196,5 @@ rule filter_consensus_reads:
           --min-reads {params.min_reads} \
           --min-base-quality {params.min_base_qual} \
           --max-base-error-rate {params.max_error_rate} \
-          | samtools sort --threads {threads} -o {output.bam}##idx##{output.bam}.bai --write-index
+          | samtools sort --threads {threads} -o {output.bam} --write-index
         """
