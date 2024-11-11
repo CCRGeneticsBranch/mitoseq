@@ -90,7 +90,6 @@ rule align_bam:
               --unmapped {input.bam} \
               --ref {params.ref} \
               --output {output.bam}
-        samtools index {output.bam}
         """
 
 rule group_reads:

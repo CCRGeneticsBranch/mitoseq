@@ -24,14 +24,17 @@ rule samtools_stats:
     input:
         bam=join(RESULTSDIR,"bam","{sample}.mapped.bam")
     output:
+        bam=join(RESULTSDIR,"bam","{sample}.mapped.sorted.bam"),
         flagstat=join(RESULTSDIR,"qc","samtools","{sample}.flagstat"),
         idxstats=join(RESULTSDIR,"qc","samtools","{sample}.idxstats")
     envmodules:
         TOOLS["samtools"]
     shell:
         """
-        samtools flagstat {input.bam} > {output.flagstat}
-        samtools idxstats {input.bam} > {output.idxstats}
+        samtools sort {input.bam} > {output.bam}
+        samtools index {output.bam}
+        samtools flagstat {output.bam} > {output.flagstat}
+        samtools idxstats {output.bam} > {output.idxstats}
         """
 
 rule create_interval_list:

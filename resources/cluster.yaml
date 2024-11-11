@@ -24,6 +24,11 @@ call_consensus_reads:
     mem: 8g
     threads: 4
 
+align_consensus_bam:
+    gres: lscratch:500
+    mem: 14g
+    threads: 16    
+    
 filter_consensus_reads:
     mem: 8g
     threads: 8
