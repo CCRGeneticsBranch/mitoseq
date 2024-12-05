@@ -100,8 +100,7 @@ rule group_reads:
         bam = join(RESULTSDIR,"bam","{sample}.grouped.bam"),
         stats = join(RESULTSDIR,"qc","fgbio","{sample}.grouped-family-sizes.txt")
     params:
-        allowed_edits = 1,
-        min_map = 1
+        allowed_edits = 1
     envmodules:
         TOOLS["java"],
         TOOLS["fgbio"]
@@ -109,9 +108,8 @@ rule group_reads:
         """
         java -Xmx8g -Djava.io.tmpdir=/lscratch/$SLURM_JOB_ID -jar $FGBIO_JAR --compression 1 --async-io GroupReadsByUmi \
           --input {input.bam} \
-          --strategy Edit \
+          --strategy Adjacency \
           --edits {params.allowed_edits} \
-          --min-map-q {params.min_map} \
           --output {output.bam} \
           --family-size-histogram {output.stats}
         """
@@ -178,8 +176,8 @@ rule filter_consensus_reads:
     params:
         ref = config[genome]['ref'],
         min_reads = 1,
-        min_base_qual = 40,
-        max_error_rate = 0.2
+        min_base_qual = 30,
+        max_error_rate = 0.1
     threads:
         getthreads("filter_consensus_reads")
     envmodules:
