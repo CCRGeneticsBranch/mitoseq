@@ -32,3 +32,6 @@ align_consensus_bam:
 filter_consensus_reads:
     mem: 8g
     threads: 8
+
+varscan_paired:
+    threads: 4

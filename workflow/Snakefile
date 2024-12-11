@@ -17,6 +17,10 @@ manifest = pd.read_table(config["manifest"])
 SAMPLES =  manifest['Sample'].unique()
 UBAM = dict(zip(manifest['Sample'], manifest['uBam']))
 
+# Get paired sample dictionary
+PAIRS = dict(zip(manifest['Sample'], manifest['Normal']))
+PAIRS = {key: value for key, value in PAIRS.items() if value}
+
 # Define tools
 with open(config["tools"]) as f:
     TOOLS = yaml.safe_load(f)
