@@ -18,8 +18,8 @@ SAMPLES =  manifest['Sample'].unique()
 UBAM = dict(zip(manifest['Sample'], manifest['uBam']))
 
 # Get paired sample dictionary
-PAIRS = dict(zip(manifest['Sample'], manifest['Normal']))
-PAIRS = {key: value for key, value in PAIRS.items() if value}
+paired = manifest[manifest['Normal'].notna()]
+PAIRS = dict(zip(paired['Sample'], paired['Normal']))
 
 # Define tools
 with open(config["tools"]) as f:
@@ -36,6 +36,7 @@ getmemg=lambda rname:CLUSTER[rname]["mem"] if rname in CLUSTER and "mem" in CLUS
 genome = config['genome']
 
 include: "rules/qc.smk"
+include: "rules/variant_calling.smk"
 
 # Rules
 
@@ -55,7 +56,17 @@ rule all:
 
         # Interval list
         join(RESULTSDIR,"bait.interval"),
-        join(RESULTSDIR,"target.interval")
+        join(RESULTSDIR,"target.interval"),
+
+        # Variant calling
+        expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.vcf"),samples=SAMPLES),
+        expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.marked.vcf"),samples=SAMPLES),
+        expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.filtered.vcf"),samples=SAMPLES),
+        expand(join(RESULTSDIR,"variants","mutect2","{samples}.vcf"),samples=PAIRS.keys()),
+        expand(join(RESULTSDIR,"variants","mutect2","{samples}.marked.vcf"),samples=PAIRS.keys()),
+        expand(join(RESULTSDIR,"variants","mutect2","{samples}.filtered.vcf"),samples=PAIRS.keys()),
+        expand(join(RESULTSDIR,"variants","varscan","{samples}.vcf"),samples=PAIRS.keys()),
+        expand(join(RESULTSDIR,"variants","varscan","{samples}.filtered.vcf"),samples=PAIRS.keys())
         
 rule link_uBam:
     """
