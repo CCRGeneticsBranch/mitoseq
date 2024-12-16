@@ -37,7 +37,7 @@ varscan_paired:
     threads: 4
 
 mutect2_mt:
-    mem: 8g
+    mem: 18g
 
 mutect2_paired:
-    mem: 12g
+    mem: 18g
