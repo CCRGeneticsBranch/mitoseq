@@ -40,8 +40,6 @@ include: "rules/variant_calling.smk"
 
 # Rules
 
-localrules: link_uBam
-
 rule all:
     input:
         # Filtered reads
@@ -61,24 +59,38 @@ rule all:
         # Variant calling
         expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.vcf"),samples=SAMPLES),
         expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.marked.vcf"),samples=SAMPLES),
-        expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.filtered.vcf"),samples=SAMPLES),
+        expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.filtered.vcf.gz"),samples=SAMPLES),
+        join(RESULTSDIR,"variants","all.chrM.filtered.vcf.gz"),
         expand(join(RESULTSDIR,"variants","mutect2","{samples}.vcf"),samples=PAIRS.keys()),
         expand(join(RESULTSDIR,"variants","mutect2","{samples}.marked.vcf"),samples=PAIRS.keys()),
-        expand(join(RESULTSDIR,"variants","mutect2","{samples}.filtered.vcf"),samples=PAIRS.keys()),
+        expand(join(RESULTSDIR,"variants","mutect2","{samples}.filtered.vcf.gz"),samples=PAIRS.keys()),
+        join(RESULTSDIR,"variants","all.mutect2.filtered.vcf.gz"),
         expand(join(RESULTSDIR,"variants","varscan","{samples}.vcf"),samples=PAIRS.keys()),
-        expand(join(RESULTSDIR,"variants","varscan","{samples}.filtered.vcf"),samples=PAIRS.keys())
+        expand(join(RESULTSDIR,"variants","varscan","{samples}.reheader.Somatic.vcf.gz"),samples=PAIRS.keys()),
+        join(RESULTSDIR,"variants","all.varscan.filtered.vcf.gz")
         
-rule link_uBam:
+rule copy_uBam:
     """
-    Link uBam from raw data directory with updated names
+    Copy uBam from raw data directory with updated name (including SM tag)
     """
     input:
         ubam=lambda wildcards: f"{UBAM[wildcards.sample]}",
     output:
         ubam=join(RESULTSDIR,"uBam","{sample}.unmapped.bam"),
+    params:
+        samplename="{sample}"
+    envmodules:
+        TOOLS["picard"]
     shell:
         """
-        ln -s {input.ubam} {output.ubam}
+        java -Xmx4g -jar $PICARDJARPATH/picard.jar AddOrReplaceReadGroups \
+            I={input.ubam} \
+            O={output.ubam} \
+            RGID=fcid \
+            RGLB={params.samplename} \
+            RGPL=ILLUMINA \
+            RGPU=fcid \
+            RGSM={params.samplename}
         """
 
 rule align_bam:

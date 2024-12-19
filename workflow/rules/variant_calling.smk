@@ -7,11 +7,14 @@ rule mutect2_mt:
     output:
         vcf = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.vcf"),
         marked_vcf = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.marked.vcf"),
-        filtered_vcf = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.filtered.vcf")
+        filtered_vcf = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.filtered.vcf.gz"),
+        header = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.header"),
+        reheader = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.reheader.vcf.gz")
     params:
         ref = config[genome]['ref']
     envmodules:
-        TOOLS["gatk4"]
+        TOOLS["gatk4"],
+        TOOLS["samtools"]
     shell: 
         """
         gatk Mutect2 \
@@ -32,6 +35,10 @@ rule mutect2_mt:
             --variant {output.marked_vcf} \
             --exclude-filtered \
             --output {output.filtered_vcf}
+
+        bcftools head {output.filtered_vcf} | sed 's/AS_FilterStatus,Number=A/AS_FilterStatus,Number=./' > {output.header}
+        bcftools reheader -h {output.header} {output.filtered_vcf} > {output.reheader}
+        tabix {output.reheader}
         """
 
 rule mutect2_paired:
@@ -42,12 +49,15 @@ rule mutect2_paired:
     output:
         vcf = join(RESULTSDIR,"variants","mutect2","{sample}.vcf"),
         marked_vcf = join(RESULTSDIR,"variants","mutect2","{sample}.marked.vcf"),
-        filtered_vcf = join(RESULTSDIR,"variants","mutect2","{sample}.filtered.vcf")
+        filtered_vcf = join(RESULTSDIR,"variants","mutect2","{sample}.filtered.vcf.gz"),
+        header = join(RESULTSDIR,"variants","mutect2","{sample}.header"),
+        reheader = join(RESULTSDIR,"variants","mutect2","{sample}.reheader.vcf.gz")
     params:
         ref = config[genome]['ref'],
         normalsample = lambda wc: "%s" % PAIRS[wc.sample]
     envmodules:
-        TOOLS["gatk4"]
+        TOOLS["gatk4"],
+        TOOLS["samtools"]
     shell: 
         """
         gatk Mutect2 \
@@ -55,6 +65,7 @@ rule mutect2_paired:
             -L chrM \
             -I {input.tumor} \
             -I {input.normal} \
+            -normal {params.normalsample} \
             -O {output.vcf}
 
         gatk FilterMutectCalls \
@@ -67,7 +78,11 @@ rule mutect2_paired:
             --variant {output.marked_vcf} \
             --exclude-filtered \
             --output {output.filtered_vcf}
-         """
+
+        bcftools head {output.filtered_vcf} | sed 's/AS_FilterStatus,Number=A/AS_FilterStatus,Number=./' > {output.header}
+        bcftools reheader -h {output.header} {output.filtered_vcf} > {output.reheader}
+        tabix {output.reheader}
+        """
 
 rule varscan_paired:
     """Runs VarScan on paired tumor/normal (adapted from Xavier)"""
@@ -76,9 +91,14 @@ rule varscan_paired:
         normal = lambda wc: join(RESULTSDIR,"bam","%s.cons.filtered.bam") % PAIRS[wc.sample]
     output:
         vcf = join(RESULTSDIR,"variants","varscan","{sample}.vcf"),
-        filtered_vcf = join(RESULTSDIR,"variants","varscan","{sample}.filtered.vcf")
+        filtered_vcf = join(RESULTSDIR,"variants","varscan","{sample}.filtered.vcf"),
+        somatic_vcf = join(RESULTSDIR,"variants","varscan","{sample}.filtered.Somatic.vcf"),
+        reheader = join(RESULTSDIR,"variants","varscan","{sample}.reheader.Somatic.vcf.gz")
     params:
         ref = config[genome]['ref'],
+        tumorsample = "{sample}",
+        normalsample = lambda wc: "%s" % PAIRS[wc.sample],
+        sample_list = join(RESULTSDIR,"variants","varscan","{sample}.list"),
         tumor_pileup = join(RESULTSDIR,"variants","varscan","{sample}.pileup"),
         normal_pileup = lambda wc: join(RESULTSDIR,"variants","varscan","%s.pileup") % PAIRS[wc.sample]
     threads: 
@@ -110,4 +130,28 @@ rule varscan_paired:
 
         varscan processSomatic {output.filtered_vcf} \
             --min-tumor-freq 0.001 
+
+        echo {params.normalsample} > {params.sample_list}
+        echo {params.tumorsample} >> {params.sample_list}
+
+        bgzip < <(bcftools reheader {output.somatic_vcf} -s {params.sample_list}) > {output.reheader}
+        tabix {output.reheader}
+        """
+
+rule combine_variants:
+    input:
+        chrM = expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.reheader.vcf.gz"),samples=SAMPLES),
+        mutect2 = expand(join(RESULTSDIR,"variants","mutect2","{samples}.reheader.vcf.gz"),samples=PAIRS.keys()),
+        varscan = expand(join(RESULTSDIR,"variants","varscan","{samples}.reheader.Somatic.vcf.gz"),samples=PAIRS.keys())
+    output:
+        chrM = join(RESULTSDIR,"variants","all.chrM.filtered.vcf.gz"),
+        mutect2 = join(RESULTSDIR,"variants","all.mutect2.filtered.vcf.gz"),
+        varscan = join(RESULTSDIR,"variants","all.varscan.filtered.vcf.gz")
+    envmodules:
+        TOOLS["samtools"]
+    shell:
+        """
+        bcftools merge --force-samples {input.chrM} -o {output.chrM}
+        bcftools merge --force-samples {input.mutect2} -o {output.mutect2}
+        bcftools merge --force-samples {input.varscan} -o {output.varscan}
         """
