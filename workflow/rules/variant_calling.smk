@@ -100,11 +100,13 @@ rule varscan_paired:
         vcf = join(RESULTSDIR,"variants","varscan","{sample}.vcf"),
         filtered_vcf = join(RESULTSDIR,"variants","varscan","{sample}.filtered.vcf"),
         somatic_vcf = join(RESULTSDIR,"variants","varscan","{sample}.filtered.Somatic.vcf"),
+        reheader = join(RESULTSDIR,"variants","varscan","{sample}.reheader.Somatic.vcf"),
         maf = join(RESULTSDIR,"variants","varscan","{sample}.maf")
     params:
         ref = config[genome]['ref'],
         tumorsample = "{sample}",
         normalsample = lambda wc: "%s" % PAIRS[wc.sample],
+        sample_list = join(RESULTSDIR,"variants","varscan","{sample}.list"),
         tumor_pileup = join(RESULTSDIR,"variants","varscan","{sample}.pileup"),
         normal_pileup = lambda wc: join(RESULTSDIR,"variants","varscan","%s.pileup") % PAIRS[wc.sample],
         vep = config[genome]['vep']
@@ -114,8 +116,7 @@ rule varscan_paired:
         TOOLS["samtools"],
         TOOLS["varscan"],
         TOOLS["gatk3"],
-        TOOLS["VEP"],
-        TOOLS["vcf2maf"]
+        TOOLS["VEP"]
     shell: 
         """
         samtools mpileup -r chrM -d 0 -f {params.ref} {input.normal} > {params.normal_pileup}
@@ -140,7 +141,13 @@ rule varscan_paired:
         varscan processSomatic {output.filtered_vcf} \
             --min-tumor-freq 0.001 
 
-        vcf2maf.pl --input-vcf {output.somatic_vcf} --output-maf {output.maf} --tumor-id {params.tumorsample} --normal-id {params.normalsample} \
+        echo {params.normalsample} > {params.sample_list}
+        echo {params.tumorsample} >> {params.sample_list}
+
+        bcftools reheader {output.somatic_vcf} -s {params.sample_list} > {output.reheader}
+
+        ml vcf2maf
+        vcf2maf.pl --input-vcf {output.reheader} --output-maf {output.maf} --tumor-id {params.tumorsample} --normal-id {params.normalsample} \
         --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --cache-version $VEP_VERSION --ref-fasta {params.ref} \
         {params.vep} --vep-forks $SLURM_CPUS_ON_NODE
         """
