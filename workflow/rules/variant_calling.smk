@@ -1,4 +1,5 @@
 # Call variants
+localrules: combine_mafs
 
 rule mutect2_mt:
     """Runs GATK MuTect2 in mitochondrial mode (single sample only)"""
@@ -7,14 +8,17 @@ rule mutect2_mt:
     output:
         vcf = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.vcf"),
         marked_vcf = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.marked.vcf"),
-        filtered_vcf = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.filtered.vcf.gz"),
-        header = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.header"),
-        reheader = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.reheader.vcf.gz")
+        filtered_vcf = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.filtered.vcf"),
+        maf = join(RESULTSDIR,"variants","mutect2_chrM","{sample}.maf")
     params:
-        ref = config[genome]['ref']
+        ref = config[genome]['ref'],
+        tumorsample = "{sample}",
+        vep = config[genome]['vep']
     envmodules:
         TOOLS["gatk4"],
-        TOOLS["samtools"]
+        TOOLS["samtools"],
+        TOOLS["VEP"],
+        TOOLS["vcf2maf"]
     shell: 
         """
         gatk Mutect2 \
@@ -36,9 +40,9 @@ rule mutect2_mt:
             --exclude-filtered \
             --output {output.filtered_vcf}
 
-        bcftools head {output.filtered_vcf} | sed 's/AS_FilterStatus,Number=A/AS_FilterStatus,Number=./' > {output.header}
-        bcftools reheader -h {output.header} {output.filtered_vcf} > {output.reheader}
-        tabix {output.reheader}
+        vcf2maf.pl --input-vcf {output.filtered_vcf} --output-maf {output.maf} --tumor-id {params.tumorsample} \
+        --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --cache-version $VEP_VERSION --ref-fasta {params.ref} \
+        {params.vep} --vep-forks $SLURM_CPUS_ON_NODE
         """
 
 rule mutect2_paired:
@@ -49,15 +53,18 @@ rule mutect2_paired:
     output:
         vcf = join(RESULTSDIR,"variants","mutect2","{sample}.vcf"),
         marked_vcf = join(RESULTSDIR,"variants","mutect2","{sample}.marked.vcf"),
-        filtered_vcf = join(RESULTSDIR,"variants","mutect2","{sample}.filtered.vcf.gz"),
-        header = join(RESULTSDIR,"variants","mutect2","{sample}.header"),
-        reheader = join(RESULTSDIR,"variants","mutect2","{sample}.reheader.vcf.gz")
+        filtered_vcf = join(RESULTSDIR,"variants","mutect2","{sample}.filtered.vcf"),
+        maf = join(RESULTSDIR,"variants","mutect2","{sample}.maf")
     params:
         ref = config[genome]['ref'],
-        normalsample = lambda wc: "%s" % PAIRS[wc.sample]
+        tumorsample = "{sample}",
+        normalsample = lambda wc: "%s" % PAIRS[wc.sample],
+        vep = config[genome]['vep']
     envmodules:
         TOOLS["gatk4"],
-        TOOLS["samtools"]
+        TOOLS["samtools"],
+        TOOLS["VEP"],
+        TOOLS["vcf2maf"]
     shell: 
         """
         gatk Mutect2 \
@@ -79,9 +86,9 @@ rule mutect2_paired:
             --exclude-filtered \
             --output {output.filtered_vcf}
 
-        bcftools head {output.filtered_vcf} | sed 's/AS_FilterStatus,Number=A/AS_FilterStatus,Number=./' > {output.header}
-        bcftools reheader -h {output.header} {output.filtered_vcf} > {output.reheader}
-        tabix {output.reheader}
+        vcf2maf.pl --input-vcf {output.filtered_vcf} --output-maf {output.maf} --tumor-id {params.tumorsample} --normal-id {params.normalsample} \
+        --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --cache-version $VEP_VERSION --ref-fasta {params.ref} \
+        {params.vep} --vep-forks $SLURM_CPUS_ON_NODE
         """
 
 rule varscan_paired:
@@ -93,20 +100,22 @@ rule varscan_paired:
         vcf = join(RESULTSDIR,"variants","varscan","{sample}.vcf"),
         filtered_vcf = join(RESULTSDIR,"variants","varscan","{sample}.filtered.vcf"),
         somatic_vcf = join(RESULTSDIR,"variants","varscan","{sample}.filtered.Somatic.vcf"),
-        reheader = join(RESULTSDIR,"variants","varscan","{sample}.reheader.Somatic.vcf.gz")
+        maf = join(RESULTSDIR,"variants","varscan","{sample}.maf")
     params:
         ref = config[genome]['ref'],
         tumorsample = "{sample}",
         normalsample = lambda wc: "%s" % PAIRS[wc.sample],
-        sample_list = join(RESULTSDIR,"variants","varscan","{sample}.list"),
         tumor_pileup = join(RESULTSDIR,"variants","varscan","{sample}.pileup"),
-        normal_pileup = lambda wc: join(RESULTSDIR,"variants","varscan","%s.pileup") % PAIRS[wc.sample]
+        normal_pileup = lambda wc: join(RESULTSDIR,"variants","varscan","%s.pileup") % PAIRS[wc.sample],
+        vep = config[genome]['vep']
     threads: 
         getthreads("varscan_paired")
     envmodules:
         TOOLS["samtools"],
         TOOLS["varscan"],
-        TOOLS["gatk3"]
+        TOOLS["gatk3"],
+        TOOLS["VEP"],
+        TOOLS["vcf2maf"]
     shell: 
         """
         samtools mpileup -r chrM -d 0 -f {params.ref} {input.normal} > {params.normal_pileup}
@@ -131,27 +140,29 @@ rule varscan_paired:
         varscan processSomatic {output.filtered_vcf} \
             --min-tumor-freq 0.001 
 
-        echo {params.normalsample} > {params.sample_list}
-        echo {params.tumorsample} >> {params.sample_list}
-
-        bgzip < <(bcftools reheader {output.somatic_vcf} -s {params.sample_list}) > {output.reheader}
-        tabix {output.reheader}
+        vcf2maf.pl --input-vcf {output.somatic_vcf} --output-maf {output.maf} --tumor-id {params.tumorsample} --normal-id {params.normalsample} \
+        --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --cache-version $VEP_VERSION --ref-fasta {params.ref} \
+        {params.vep} --vep-forks $SLURM_CPUS_ON_NODE
         """
-
-rule combine_variants:
+      
+rule combine_mafs:
+    """Combine mafs across samples"""
     input:
-        chrM = expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.reheader.vcf.gz"),samples=SAMPLES),
-        mutect2 = expand(join(RESULTSDIR,"variants","mutect2","{samples}.reheader.vcf.gz"),samples=PAIRS.keys()),
-        varscan = expand(join(RESULTSDIR,"variants","varscan","{samples}.reheader.Somatic.vcf.gz"),samples=PAIRS.keys())
+        chrM = expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.maf"),samples=SAMPLES),
+        mutect2 = expand(join(RESULTSDIR,"variants","mutect2","{samples}.maf"),samples=PAIRS.keys()),
+        varscan = expand(join(RESULTSDIR,"variants","varscan","{samples}.maf"),samples=PAIRS.keys())
     output:
-        chrM = join(RESULTSDIR,"variants","all.chrM.filtered.vcf.gz"),
-        mutect2 = join(RESULTSDIR,"variants","all.mutect2.filtered.vcf.gz"),
-        varscan = join(RESULTSDIR,"variants","all.varscan.filtered.vcf.gz")
-    envmodules:
-        TOOLS["samtools"]
+        chrM = join(RESULTSDIR,"variants","all.chrM.maf"),
+        mutect2 = join(RESULTSDIR,"variants","all.mutect2.maf"),
+        varscan = join(RESULTSDIR,"variants","all.varscan.maf")
     shell:
         """
-        bcftools merge --force-samples {input.chrM} -o {output.chrM}
-        bcftools merge --force-samples {input.mutect2} -o {output.mutect2}
-        bcftools merge --force-samples {input.varscan} -o {output.varscan}
+        head -2 {input.chrM[0]} > {output.chrM}
+        awk 'FNR>2 {{print}}' {input.chrM} >> {output.chrM}
+
+        head -2 {input.mutect2[0]} > {output.mutect2}
+        awk 'FNR>2 {{print}}' {input.mutect2} >> {output.mutect2}
+
+        head -2 {input.varscan[0]} > {output.varscan}
+        awk 'FNR>2 {{print}}' {input.varscan} >> {output.varscan}
         """

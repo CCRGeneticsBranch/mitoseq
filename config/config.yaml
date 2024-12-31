@@ -23,6 +23,8 @@ hg38:
         PIPELINE_HOME/resources/xgen-human-mtdna-hyb-panel-probes.bed
     target:
         PIPELINE_HOME/resources/xgen-human-mtdna-hyb-panel-targets.bed
+    vep:
+        "--ncbi-build GRCh38 --species homo_sapiens"
 
 mm10:
     ref:
@@ -33,6 +35,8 @@ mm10:
         PIPELINE_HOME/resources/xGen_mm_mtDNA_panel_probes.bed    
     target:
         PIPELINE_HOME/resources/xGen_mm_mtDNA_panel_targets.bed
+    vep:
+        "--ncbi-build GRCm38 --species mus_musculus"
 
 hg38_masked:
     ref:
@@ -43,6 +47,8 @@ hg38_masked:
         PIPELINE_HOME/resources/xgen-human-mtdna-hyb-panel-probes.bed
     target:
         PIPELINE_HOME/resources/xgen-human-mtdna-hyb-panel-targets.bed
+    vep:
+        "--ncbi-build GRCh38 --species homo_sapiens"
 
 mm10_masked:
     ref:
@@ -53,6 +59,8 @@ mm10_masked:
         PIPELINE_HOME/resources/xGen_mm_mtDNA_panel_probes.bed    
     target:
         PIPELINE_HOME/resources/xGen_mm_mtDNA_panel_targets.bed
+    vep:
+        "--ncbi-build GRCm38 --species mus_musculus"
 
 hg38_chrM:
     ref:
@@ -63,6 +71,8 @@ hg38_chrM:
         PIPELINE_HOME/resources/xgen-human-mtdna-hyb-panel-probes.bed
     target:
         PIPELINE_HOME/resources/xgen-human-mtdna-hyb-panel-targets.bed
+    vep:
+        "--ncbi-build GRCh38 --species homo_sapiens"
 
 mm10_chrM:
     ref:
@@ -73,3 +83,5 @@ mm10_chrM:
         PIPELINE_HOME/resources/xGen_mm_mtDNA_panel_probes.bed    
     target:
         PIPELINE_HOME/resources/xGen_mm_mtDNA_panel_targets.bed
+    vep:
+        "--ncbi-build GRCm38 --species mus_musculus"
