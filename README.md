@@ -1,6 +1,8 @@
 Pipeline to call variants from high-coverage mitochondrial capture sequencing
-1. UMI consensus calling
-2. QC
+1. UMI consensus read calling and filtering
+2. Alignment to genome (including unmasked, NUMT-masked, chrM only)
+3. Variant calling with MuTect2 (mitochondrial mode, paired) and Varscan
+4. QC
 
 To run the pipeline, clone the repo from github. In an interactive session, initialize the analysis directory with:
 ```
