@@ -35,10 +35,10 @@ filter_consensus_reads:
 
 varscan_paired:
     threads: 4
-    mem: 18g
+    mem: 32g
 
 mutect2_mt:
-    mem: 18g
+    mem: 32g
 
 mutect2_paired:
-    mem: 18g
+    mem: 32g
