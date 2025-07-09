@@ -1,3 +1,4 @@
+
 # Call variants
 localrules: combine_mafs
 
@@ -54,6 +55,7 @@ rule mutect2_paired:
         vcf = join(RESULTSDIR,"variants","mutect2","{sample}.vcf"),
         marked_vcf = join(RESULTSDIR,"variants","mutect2","{sample}.marked.vcf"),
         filtered_vcf = join(RESULTSDIR,"variants","mutect2","{sample}.filtered.vcf"),
+        marked_maf = join(RESULTSDIR,"variants","mutect2","{sample}.marked.maf"),
         maf = join(RESULTSDIR,"variants","mutect2","{sample}.maf")
     params:
         ref = config[genome]['ref'],
@@ -85,6 +87,11 @@ rule mutect2_paired:
             --variant {output.marked_vcf} \
             --exclude-filtered \
             --output {output.filtered_vcf}
+
+        # Convert .marked.vcf to .maf (for all calls, not just filtered)
+        vcf2maf.pl --input-vcf {output.marked_vcf} --output-maf {output.marked_maf} --tumor-id {params.tumorsample} --normal-id {params.normalsample} \
+        --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --cache-version $VEP_VERSION --ref-fasta {params.ref} \
+        {params.vep} --vep-forks $SLURM_CPUS_ON_NODE
 
         vcf2maf.pl --input-vcf {output.filtered_vcf} --output-maf {output.maf} --tumor-id {params.tumorsample} --normal-id {params.normalsample} \
         --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --cache-version $VEP_VERSION --ref-fasta {params.ref} \
@@ -157,10 +164,12 @@ rule combine_mafs:
     input:
         chrM = expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.maf"),samples=SAMPLES),
         mutect2 = expand(join(RESULTSDIR,"variants","mutect2","{samples}.maf"),samples=PAIRS.keys()),
+        mutect2_marked = expand(join(RESULTSDIR,"variants","mutect2","{samples}.marked.maf"),samples=PAIRS.keys()),
         varscan = expand(join(RESULTSDIR,"variants","varscan","{samples}.maf"),samples=PAIRS.keys())
     output:
         chrM = join(RESULTSDIR,"variants","all.chrM.maf"),
         mutect2 = join(RESULTSDIR,"variants","all.mutect2.maf"),
+        mutect2_marked = join(RESULTSDIR,"variants","all.mutect2.marked.maf"),
         varscan = join(RESULTSDIR,"variants","all.varscan.maf")
     shell:
         """
@@ -169,6 +178,9 @@ rule combine_mafs:
 
         head -2 {input.mutect2[0]} > {output.mutect2}
         awk 'FNR>2 {{print}}' {input.mutect2} >> {output.mutect2}
+
+        head -2 {input.mutect2_marked[0]} > {output.mutect2_marked}
+        awk 'FNR>2 {{print}}' {input.mutect2_marked} >> {output.mutect2_marked}
 
         head -2 {input.varscan[0]} > {output.varscan}
         awk 'FNR>2 {{print}}' {input.varscan} >> {output.varscan}
