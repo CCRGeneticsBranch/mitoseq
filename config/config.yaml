@@ -14,6 +14,9 @@ cluster:
 # Reference genome
 genome: hg38
 
+# Consensus read filtering min_base_qual
+min_base_qual: 30
+
 hg38:
     ref:
         /fdb/genomebrowser/fasta/hg38.fa

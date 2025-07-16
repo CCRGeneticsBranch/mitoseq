@@ -43,13 +43,13 @@ include: "rules/variant_calling.smk"
 rule all:
     input:
         # Filtered reads
-        expand(join(RESULTSDIR,"bam","{samples}.cons.filtered.bam"),samples=SAMPLES),
+        expand(join(RESULTSDIR,"bam","{samples}.cons.filtered.bam"), samples=SAMPLES),
 
         # QC
-        expand(join(RESULTSDIR,"qc","fastqc","{samples}.unmapped_fastqc.html"),samples=SAMPLES),
-        expand(join(RESULTSDIR,"qc","samtools","{samples}.flagstat"),samples=SAMPLES),
-        expand(join(RESULTSDIR,"qc","samtools","{samples}.idxstats"),samples=SAMPLES),
-        expand(join(RESULTSDIR,"qc","picard","{samples}.hs_metrics"),samples=SAMPLES),
+        expand(join(RESULTSDIR,"qc","fastqc","{samples}.unmapped_fastqc.html"), samples=SAMPLES),
+        expand(join(RESULTSDIR,"qc","samtools","{samples}.flagstat"), samples=SAMPLES),
+        expand(join(RESULTSDIR,"qc","samtools","{samples}.idxstats"), samples=SAMPLES),
+        expand(join(RESULTSDIR,"qc","picard","{samples}.hs_metrics"), samples=SAMPLES),
         join(RESULTSDIR,"qc","multiqc_report.html"),
 
         # Interval list
@@ -57,14 +57,15 @@ rule all:
         join(RESULTSDIR,"target.interval"),
 
         # Variant calling
-        expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.filtered.vcf"),samples=SAMPLES),
-        expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.maf"),samples=SAMPLES),
+        expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.filtered.vcf"), samples=SAMPLES),
+        expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.maf"), samples=SAMPLES),
         join(RESULTSDIR,"variants","all.chrM.maf"),
-        expand(join(RESULTSDIR,"variants","mutect2","{samples}.filtered.vcf"),samples=PAIRS.keys()),
-        expand(join(RESULTSDIR,"variants","mutect2","{samples}.maf"),samples=PAIRS.keys()),
+        expand(join(RESULTSDIR,"variants","mutect2","{samples}.filtered.vcf"), samples=PAIRS.keys()),
+        expand(join(RESULTSDIR,"variants","mutect2","{samples}.maf"), samples=PAIRS.keys()),
         join(RESULTSDIR,"variants","all.mutect2.maf"),
-        expand(join(RESULTSDIR,"variants","varscan","{samples}.filtered.Somatic.vcf"),samples=PAIRS.keys()),
-        expand(join(RESULTSDIR,"variants","varscan","{samples}.maf"),samples=PAIRS.keys()),
+        join(RESULTSDIR,"variants","all.mutect2.marked.maf"),
+        expand(join(RESULTSDIR,"variants","varscan","{samples}.filtered.Somatic.vcf"), samples=PAIRS.keys()),
+        expand(join(RESULTSDIR,"variants","varscan","{samples}.maf"), samples=PAIRS.keys()),
         join(RESULTSDIR,"variants","all.varscan.maf")
         
 rule copy_uBam:
@@ -201,7 +202,7 @@ rule filter_consensus_reads:
     params:
         ref = config[genome]['ref'],
         min_reads = 1,
-        min_base_qual = 30,
+        min_base_qual = config['min_base_qual'], 
         max_error_rate = 0.1
     threads:
         getthreads("filter_consensus_reads")
