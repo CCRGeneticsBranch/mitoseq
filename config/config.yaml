@@ -17,6 +17,9 @@ genome: hg38
 # Consensus read filtering min_base_qual
 min_base_qual: 30
 
+# MuTect2 downsampling (--max-reads-per-alignment-start)
+max_reads_mutect2: 0
+
 hg38:
     ref:
         /fdb/genomebrowser/fasta/hg38.fa

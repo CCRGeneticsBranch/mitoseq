@@ -14,7 +14,8 @@ rule mutect2_mt:
     params:
         ref = config[genome]['ref'],
         tumorsample = "{sample}",
-        vep = config[genome]['vep']
+        vep = config[genome]['vep'],
+        max_reads = config['max_reads_mutect2']
     envmodules:
         TOOLS["gatk4"],
         TOOLS["samtools"],
@@ -27,7 +28,8 @@ rule mutect2_mt:
             -I {input.bam} \
             -O {output.vcf} \
             -L chrM \
-            --mitochondria-mode
+            --mitochondria-mode \
+            --max-reads-per-alignment-start {params.max_reads}
 
         gatk FilterMutectCalls \
             -R {params.ref} \
@@ -61,7 +63,8 @@ rule mutect2_paired:
         ref = config[genome]['ref'],
         tumorsample = "{sample}",
         normalsample = lambda wc: "%s" % PAIRS[wc.sample],
-        vep = config[genome]['vep']
+        vep = config[genome]['vep'],
+        max_reads = config['max_reads_mutect2']
     envmodules:
         TOOLS["gatk4"],
         TOOLS["samtools"],
@@ -75,7 +78,8 @@ rule mutect2_paired:
             -I {input.tumor} \
             -I {input.normal} \
             -normal {params.normalsample} \
-            -O {output.vcf}
+            -O {output.vcf} \
+            --max-reads-per-alignment-start {params.max_reads}
 
         gatk FilterMutectCalls \
             -R {params.ref} \

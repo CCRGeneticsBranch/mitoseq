@@ -39,6 +39,7 @@ varscan_paired:
 
 mutect2_mt:
     mem: 32g
+    time: 00-01:00:00
 
 mutect2_paired:
     mem: 32g
