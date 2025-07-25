@@ -57,8 +57,10 @@ rule mutect2_paired:
         vcf = join(RESULTSDIR,"variants","mutect2","{sample}.vcf"),
         marked_vcf = join(RESULTSDIR,"variants","mutect2","{sample}.marked.vcf"),
         filtered_vcf = join(RESULTSDIR,"variants","mutect2","{sample}.filtered.vcf"),
+        filtered_vaf01_vcf = join(RESULTSDIR,"variants","mutect2","{sample}.vaf01.vcf"),
         marked_maf = join(RESULTSDIR,"variants","mutect2","{sample}.marked.maf"),
-        maf = join(RESULTSDIR,"variants","mutect2","{sample}.maf")
+        maf = join(RESULTSDIR,"variants","mutect2","{sample}.filtered.maf"),
+        filtered_vaf01_maf = join(RESULTSDIR,"variants","mutect2","{sample}.vaf01.maf")
     params:
         ref = config[genome]['ref'],
         tumorsample = "{sample}",
@@ -92,12 +94,25 @@ rule mutect2_paired:
             --exclude-filtered \
             --output {output.filtered_vcf}
 
+        # Filter to variants with VAF >= 0.01, no FILTER filtering
+        gatk SelectVariants \
+            -R {params.ref} \
+            --variant {output.marked_vcf} \
+            --select "AF >= 0.01" \
+            --output {output.filtered_vaf01_vcf}
+
         # Convert .marked.vcf to .maf (for all calls, not just filtered)
         vcf2maf.pl --input-vcf {output.marked_vcf} --output-maf {output.marked_maf} --tumor-id {params.tumorsample} --normal-id {params.normalsample} \
         --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --cache-version $VEP_VERSION --ref-fasta {params.ref} \
         {params.vep} --vep-forks $SLURM_CPUS_ON_NODE
 
+        # Convert filtered vcf to maf (standard filtering)
         vcf2maf.pl --input-vcf {output.filtered_vcf} --output-maf {output.maf} --tumor-id {params.tumorsample} --normal-id {params.normalsample} \
+        --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --cache-version $VEP_VERSION --ref-fasta {params.ref} \
+        {params.vep} --vep-forks $SLURM_CPUS_ON_NODE
+
+        # Convert filtered vcf to maf (custom filtering)
+        vcf2maf.pl --input-vcf {output.filtered_vaf01_vcf} --output-maf {output.filtered_vaf01_maf} --tumor-id {params.tumorsample} --normal-id {params.normalsample} \
         --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --cache-version $VEP_VERSION --ref-fasta {params.ref} \
         {params.vep} --vep-forks $SLURM_CPUS_ON_NODE
         """
@@ -166,14 +181,16 @@ rule varscan_paired:
 rule combine_mafs:
     """Combine mafs across samples"""
     input:
-        chrM = expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.maf"),samples=SAMPLES),
-        mutect2 = expand(join(RESULTSDIR,"variants","mutect2","{samples}.maf"),samples=PAIRS.keys()),
-        mutect2_marked = expand(join(RESULTSDIR,"variants","mutect2","{samples}.marked.maf"),samples=PAIRS.keys()),
-        varscan = expand(join(RESULTSDIR,"variants","varscan","{samples}.maf"),samples=PAIRS.keys())
+        chrM = expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.maf"), samples=SAMPLES),
+        mutect2 = expand(join(RESULTSDIR,"variants","mutect2","{samples}.filtered.maf"), samples=PAIRS.keys()),
+        mutect2_marked = expand(join(RESULTSDIR,"variants","mutect2","{samples}.marked.maf"), samples=PAIRS.keys()),
+        mutect2_vaf01 = expand(join(RESULTSDIR,"variants","mutect2","{samples}.vaf01.maf"), samples=PAIRS.keys()),
+        varscan = expand(join(RESULTSDIR,"variants","varscan","{samples}.maf"), samples=PAIRS.keys())
     output:
         chrM = join(RESULTSDIR,"variants","all.chrM.maf"),
-        mutect2 = join(RESULTSDIR,"variants","all.mutect2.maf"),
+        mutect2 = join(RESULTSDIR,"variants","all.mutect2.filtered.maf"),
         mutect2_marked = join(RESULTSDIR,"variants","all.mutect2.marked.maf"),
+        mutect2_filtered = join(RESULTSDIR,"variants","all.mutect2.filteredv2.maf"),
         varscan = join(RESULTSDIR,"variants","all.varscan.maf")
     shell:
         """
@@ -185,6 +202,9 @@ rule combine_mafs:
 
         head -2 {input.mutect2_marked[0]} > {output.mutect2_marked}
         awk 'FNR>2 {{print}}' {input.mutect2_marked} >> {output.mutect2_marked}
+
+        head -2 {input.mutect2_vaf01[0]} > {output.mutect2_filtered}
+        awk 'FNR>2 && $101 !~ /normal_artifact/ && $101 !~ /weak_evidence/ {{print}}' {input.mutect2_vaf01} >> {output.mutect2_filtered}
 
         head -2 {input.varscan[0]} > {output.varscan}
         awk 'FNR>2 {{print}}' {input.varscan} >> {output.varscan}

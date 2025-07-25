@@ -61,9 +61,11 @@ rule all:
         expand(join(RESULTSDIR,"variants","mutect2_chrM","{samples}.maf"), samples=SAMPLES),
         join(RESULTSDIR,"variants","all.chrM.maf"),
         expand(join(RESULTSDIR,"variants","mutect2","{samples}.filtered.vcf"), samples=PAIRS.keys()),
-        expand(join(RESULTSDIR,"variants","mutect2","{samples}.maf"), samples=PAIRS.keys()),
-        join(RESULTSDIR,"variants","all.mutect2.maf"),
+        expand(join(RESULTSDIR,"variants","mutect2","{samples}.filtered.maf"), samples=PAIRS.keys()),
+        expand(join(RESULTSDIR,"variants","mutect2","{samples}.vaf01.maf"), samples=PAIRS.keys()),
+        join(RESULTSDIR,"variants","all.mutect2.filtered.maf"),
         join(RESULTSDIR,"variants","all.mutect2.marked.maf"),
+        join(RESULTSDIR,"variants","all.mutect2.filteredv2.maf"),
         expand(join(RESULTSDIR,"variants","varscan","{samples}.filtered.Somatic.vcf"), samples=PAIRS.keys()),
         expand(join(RESULTSDIR,"variants","varscan","{samples}.maf"), samples=PAIRS.keys()),
         join(RESULTSDIR,"variants","all.varscan.maf")
