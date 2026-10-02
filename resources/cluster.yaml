@@ -43,3 +43,4 @@ mutect2_mt:
 
 mutect2_paired:
     mem: 32g
+    time: 00-01:00:00
