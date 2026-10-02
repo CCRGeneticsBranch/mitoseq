@@ -10,7 +10,17 @@ import pandas as pd
 # Set directories
 WORKDIR = config["workdir"]
 RESULTSDIR = join(WORKDIR,"results")
-SCRIPTSDIR = config["scriptsdir"]
+
+# Pipeline version (bump VERSION file on each release)
+PIPELINE_HOME = os.path.dirname(workflow.basedir)
+with open(join(PIPELINE_HOME, "VERSION")) as f:
+    PIPELINE_VERSION = f.read().strip()
+print(f"Pipeline version: {PIPELINE_VERSION}")
+
+onstart:
+    os.makedirs(RESULTSDIR, exist_ok=True)
+    with open(join(RESULTSDIR, "pipeline_version.txt"), "w") as f:
+        f.write(f"{PIPELINE_VERSION}\n")
 
 # Get list of samples
 manifest = pd.read_table(config["manifest"])
