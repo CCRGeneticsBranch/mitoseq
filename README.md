@@ -115,6 +115,10 @@ Modules are listed in [resources/tools.yaml](resources/tools.yaml).
 
 The pipeline version is in [VERSION](VERSION) and changes are listed in [CHANGELOG.md](CHANGELOG.md). Each run records the pipeline version, git commit and launcher version in `runinfo.yaml` and `results/pipeline_version.txt`. The launch script is a copy of [biowulf-snakemake-launcher](https://github.com/CCRGeneticsBranch/biowulf-snakemake-launcher) (`bin/launcher.sh`).
 
+## License
+
+Original pipeline code and documentation are licensed under MIT; see [LICENSE](LICENSE). Reference data and bundled xGen panel files retain their own terms. The MIT license does not grant redistribution rights for external or bundled third-party resources.
+
 ## Contact
 
 Erica Pehrsson, Genetics Branch, Center for Cancer Research, National Cancer Institute. Please report problems through GitHub issues.
