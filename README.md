@@ -69,7 +69,7 @@ bash mitoseq/run_mitoseq --runmode=unlock --workdir=/path/to/my_run
 | `hg38`, `mm10`: `ref`, `bwa_ref` | `/fdb/genomebrowser/fasta/`, `/fdb/bwa/indexes/` | UCSC reference FASTA and BWA indexes | No |
 | `hg38_masked`, `mm10_masked`: `ref`, `bwa_ref` | `/data/khanlab3/gb_omics/resources/mitoblacklist/masked_genomes/` | NuMT-masked genome FASTA and BWA indexes (UCSC reference genome masked using [mitoblacklist](https://github.com/caleblareau/mitoblacklist) and bedtools makefasta) | No |
 | `hg38_chrM`, `mm10_chrM`: `ref`, `bwa_ref` | `/data/khanlab3/gb_omics/resources/mitoblacklist/chrM_genome/` | chrM-only FASTA and BWA indexes (extracted from UCSC genomes) | No |
-| `<genome>: bait`, `target` | `PIPELINE_HOME/resources/xgen-*.bed` | xGen panel probe and target BEDs for Picard HsMetrics (IDT xGen; exact product/catalog source and redistribution permission: **TODO**) | No |
+| `<genome>: bait`, `target` | `PIPELINE_HOME/resources/xgen-*.bed` | panel probe and target BEDs for Picard HsMetrics (from IDT xGen - human commercially available, mouse custom) | No |
 | `<genome>: vep` | e.g. `--ncbi-build GRCh38 --species homo_sapiens` | vcf2maf/VEP species and build | No |
 | `min_base_qual` | `30` | Minimum consensus base quality (`FilterConsensusReads`) | As needed |
 | `max_reads_mutect2` | `0` | Mutect2 `--max-reads-per-alignment-start` (0 = no downsampling) | As needed |
